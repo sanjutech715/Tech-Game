@@ -35,7 +35,7 @@ button{border:1px solid #ffffff20;background:linear-gradient(100deg,#a855f7,#7c3
 <h2 style="margin:18px 0 4px">🏆 Final Scoreboard</h2><small>Live: updates as others finish</small><div id="lb"></div></div></div>
 <div id="ov"><div><h1>🚨</h1><h2 id="ot"></h2><button onclick="ov.style.display='none'">I promise to behave 🙏</button></div></div>
 <script>
-const $=id=>document.getElementById(id),R=a=>a[Math.floor(Math.random()*a.length)],post=(u,b)=>fetch(u,{method:'POST',body:JSON.stringify(b)}).then(r=>r.json());
+const $=id=>document.getElementById(id),R=a=>a[Math.floor(Math.random()*a.length)],post=(u,b)=>fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)}).then(async r=>{const result=await r.json();return r.ok?result:{...result,error:result.error||'Request failed'}}).catch(()=>({error:'Cannot connect to the game server. Check your connection and try again.'}));
 const S=['Quantitative Aptitude','Logical Reasoning','English Grammar','Python','C Programming','C++','Technical Interview'];
 const G=['Cluck yeah! 🐔','Eggs-cellent! 🥚','Hop hop hooray! 🎉','Chicken genius! 🧠'],B=['Slipped on a banana! 🍌','HONK! Almost roadkill 🚗','Fried chicken incoming 🍗','Brain.exe stopped working 💥'],W=['BUSTED! 🚨','Caught in 4K 📸','Nice try, Sherlock 🕵️','Cluck! We saw that 👀'];
 let reg,qs,ans,i,end,max,score,streak=0,play=false,done=false,away=false,t0=0,outs=0,busy=false,mine='';
@@ -50,22 +50,21 @@ async function go(){const name=$('n').value.trim(),r=$('r').value.trim();if(!nam
 function draw(){busy=false;const q=qs[i];$('sec').textContent=`Section ${'ABCDEFG'[q.section]} · ${S[q.section]}`;$('qn').textContent=`Q${i+1}/${qs.length}`;$('progress').style.width=`${(i/qs.length)*100}%`;
  $('q').textContent=q.q;$('sc').textContent=`Score ${score} · 🔥 ${streak}`;$('fb').textContent='';$('opts').innerHTML='';
  q.o.forEach((t,k)=>{const b=document.createElement('button');b.className='o';b.textContent='ABCD'[k]+'. '+t;b.onclick=()=>pick(k,b);$('opts').appendChild(b)})}
-async function pick(k,b){if(busy||!play)return;busy=true;const j=await post('/api/answer',{reg,i,c:k});if(j.error)return;
+async function pick(k,b){if(busy||!play)return;busy=true;const j=await post('/api/answer',{reg,i,c:k});if(j.error){busy=false;return alert(j.error)}
  score=j.score;streak=j.ok?streak+1:0;b.classList.add(j.ok?'ok':'no');
  if(j.ok){move();anim('hop');burst(['⭐','🎉','🥚','✨','🍗'],8)}else{anim('slip');burst(['🍌','💥','🚗','💨'],6)}
  $('fb').textContent=R(j.ok?G:B)+(streak>2?` 🔥×${streak}`:'');$('sc').textContent=`Score ${score} · 🔥 ${streak}`;
  setTimeout(()=>{++i<qs.length?draw():fin()},1500)}
-async function fin(locked){if(done)return;done=true;play=false;ov.style.display='none';const j=await post('/api/finish',{reg});
+async function fin(locked){if(done)return;done=true;play=false;ov.style.display='none';const j=await post('/api/finish',{reg});if(j.error){done=false;return alert(`${j.error} Refresh the page to reconnect to your quiz.`)}
  if(document.fullscreenElement)document.exitFullscreen();show('s3');const s=j.score??score,n=qs?qs.length:30;$('fin').textContent=`${s}/${n}`;
  $('em').textContent=s>=27?'🏆':s>=20?'🥷':s>=12?'🐔':'🍗';
  $('rk').textContent=locked?'🚫 Auto-submitted: too many exits!':s>=27?'🏆 Legend of Rathinam':s>=20?'😎 Code Ninja':s>=12?'🙂 Still compiling...':'🍗 Became fried chicken. Revise!';
- board()}
-let boardRows=[];
-const boardStream=new EventSource('/api/board/stream');
-boardStream.onmessage=event=>{boardRows=JSON.parse(event.data);board()};
-function board(){const d=[...boardRows].sort((a,b)=>b.score-a.score||a.outs-b.outs);
+ board();clearInterval(boardTimer);boardTimer=setInterval(board,5000)}
+let boardRows=[],boardTimer;
+async function board(){try{const response=await fetch('/api/board');if(!response.ok)throw new Error(`Scoreboard request failed (${response.status})`);boardRows=await response.json()}catch(error){console.error(error);return}
+ const d=[...boardRows].sort((a,b)=>b.score-a.score||a.outs-b.outs);
  $('lb').innerHTML=d.map((x,k)=>`<div class="lb ${x.id==mine&&x.name.toLowerCase()==$('n').value.trim().toLowerCase()?'me':''}" style="animation-delay:${Math.min(k,15)*.07}s"><span>${['🥇','🥈','🥉'][k]||k+1}</span><b>${x.name.replace(/[<>&"]/g,'')} <small>${x.id}</small></b><span>${x.status=='playing'?'⌨️ playing':x.score+'/30'}</span><small>🚪${x.outs}</small></div>`).join('')}
-function tick(){if(!end)return;const s=Math.max(0,Math.round((end-Date.now())/1000));$('tm').textContent=`⏱ ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;if(!s)fin()}
+function tick(){if(!end)return;const s=Math.max(0,Math.round((end-Date.now())/1000));$('tm').textContent=`⏱ ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;if(!s&&play)fin()}
 // ---- cheat watch: every event goes to the admin ----
 function ev(t,d,r){if(!play)return;post('/api/event',{reg,t,d,r}).then(j=>{if(j.locked)fin(true)}).catch(()=>{})}
 function leave(r){if(!play||away)return;away=true;t0=Date.now();outs++;ev('out',0,r)}

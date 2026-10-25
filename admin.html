@@ -9,13 +9,14 @@ tr.CHEATING td{background:#3a1220}input,button{font:inherit;padding:8px 12px;bor
 <div id="main" hidden><p><a href="/">Open student page</a></p><div class="t" id="sum"></div><label><input type="checkbox" onchange="only=this.checked;draw()"> Show only suspicious / cheating</label>
 <div class="w"><table><thead><tr><th>#</th><th>Student (ID)</th><th>Score</th><th>Done</th><th>Status</th><th>Exits</th><th>Away</th><th>Flags</th><th>Browser</th><th>Where they went</th><th>Verdict</th></tr></thead><tbody id="tb"></tbody></table></div></div>
 <script>
-let pin='',rows=[],open=null,only=false;const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+let pin='',rows=[],open=null,only=false,adminTimer;const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const L={out:'🚪 Left the exam',copy:'📋 Tried to copy',paste:'📥 Tried to paste',menu:'🖱️ Right-click',keys:'⌨️ Blocked shortcut',fs:'🖥️ Exited fullscreen',reload:'🔄 Reloaded / re-login',idclash:'🕵️ Someone else tried this ID'};
 const ST={playing:'⌨️ Playing',done:'✅ Submitted',locked:'🚫 Auto-locked'};
 const app=ua=>(/Edg/.test(ua)?'Edge':/OPR/.test(ua)?'Opera':/Chrome/.test(ua)?'Chrome':/Firefox/.test(ua)?'Firefox':/Safari/.test(ua)?'Safari':'Unknown')+' / '+(/Windows/.test(ua)?'Windows':/Android/.test(ua)?'Android':/iPhone|iPad/.test(ua)?'iOS':/Mac/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'?');
 const where=ev=>{const o=ev.filter(e=>e.t=='out'),t=o.filter(e=>/Tab hidden/.test(e.r)).length,w=o.length-t;return o.length?[t&&t+'× other tab / minimised',w&&w+'× other window / app'].filter(Boolean).join(', '):'—'};
-async function login(){pin=$('p').value;const r=await fetch('/api/admin/data?pin='+encodeURIComponent(pin));if(!r.ok)return alert('Wrong PIN');rows=await r.json();
- $('lg').hidden=true;$('main').hidden=false;draw();new EventSource('/api/admin/stream?pin='+encodeURIComponent(pin)).onmessage=m=>{rows=JSON.parse(m.data);draw()}}
+async function login(){pin=$('p').value;try{const r=await fetch('/api/admin/data?pin='+encodeURIComponent(pin)),result=await r.json();if(!r.ok)return alert(result.error||'Admin login failed');rows=result;
+ $('lg').hidden=true;$('main').hidden=false;draw();clearInterval(adminTimer);adminTimer=setInterval(refreshAdminData,4000)}catch(error){console.error(error);alert('Could not connect to the admin API. Check the Vercel deployment and database setup.')}}
+async function refreshAdminData(){try{const response=await fetch('/api/admin/data?pin='+encodeURIComponent(pin));if(!response.ok)throw new Error(`Admin data request failed (${response.status})`);rows=await response.json();draw()}catch(error){console.error(error)}}
 function draw(){const s=[...rows].sort((a,b)=>b.score-a.score||b.done-a.done||a.away-b.away),c=k=>rows.filter(r=>r.risk==k).length;
  $('sum').innerHTML=`<div><b>${rows.length}</b>Students</div><div><b>${rows.filter(r=>r.status!='playing').length}</b>Finished</div><div><b class="SUSPICIOUS">${c('SUSPICIOUS')}</b>Suspicious</div><div><b class="CHEATING">${c('CHEATING')}</b>Cheating</div>`;
  $('tb').innerHTML=s.map((r,k)=>{if(only&&r.risk=='CLEAN')return'';
