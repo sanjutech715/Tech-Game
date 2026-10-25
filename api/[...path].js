@@ -66,7 +66,7 @@ const dbRequest=async(path,options={})=>{
 };
 const encodeFilter=value=>encodeURIComponent(value);
 const findStudent=async reg=>{
- const query=new URLSearchParams({select:'record',reg:`eq.${reg}`,limit:'1'});
+ const query=new URLSearchParams({select:'payload',reg:`eq.${reg}`,limit:'1'});
  const result=await dbRequest(`students?${query}`);
  return result[0]?.payload||null;
 };
