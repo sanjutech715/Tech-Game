@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · Live Scoreboard</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f1226;color:#e8ebff;margin:0;padding:16px}h1{margin:0 0 12px}.t{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.t div{background:#1c2145;border-radius:12px;padding:10px 16px}.t b{font-size:22px;display:block}table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px;text-align:left;border-bottom:1px solid #2b3160}tr.r{cursor:pointer}.CLEAN{color:#3ddc84}.SUSPICIOUS{color:#ffb020}.CHEATING{color:#ff5d6c;font-weight:700}
+tr.CHEATING td{background:#3a1220}input,button{font:inherit;padding:8px 12px;border-radius:8px;border:0}.d td{background:#171b3a;font-size:13px}.w{overflow-x:auto}.del{background:#ff5d6c;color:#fff;padding:6px 10px;cursor:pointer}.del-mini{font-size:11px;padding:2px 6px;margin-left:6px;vertical-align:middle}
+</style></head><body><h1>🏆 Chicken Road Rush · Admin Cheat Radar</h1>
+<div id="lg"><p>Enter the admin PIN to open the admin dashboard.</p><input id="p" type="password" placeholder="Admin PIN"> <button onclick="login()">Enter</button></div>
+<div id="main" hidden><p><a href="/">Open student page</a></p><div class="t" id="sum"></div><label><input type="checkbox" onchange="only=this.checked;draw()"> Show only suspicious / cheating</label>
+<div class="w"><table><thead><tr><th>#</th><th>Student (ID)</th><th>Score</th><th>Done</th><th>Status</th><th>Exits</th><th>Away</th><th>Flags</th><th>Browser</th><th>Where they went</th><th>Verdict</th></tr></thead><tbody id="tb"></tbody></table></div></div>
+<script>
+let pin='',rows=[],open=null,only=false;const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const L={out:'🚪 Left the exam',copy:'📋 Tried to copy',paste:'📥 Tried to paste',menu:'🖱️ Right-click',keys:'⌨️ Blocked shortcut',fs:'🖥️ Exited fullscreen',reload:'🔄 Reloaded / re-login',idclash:'🕵️ Someone else tried this ID'};
+const ST={playing:'⌨️ Playing',done:'✅ Submitted',locked:'🚫 Auto-locked'};
+const app=ua=>(/Edg/.test(ua)?'Edge':/OPR/.test(ua)?'Opera':/Chrome/.test(ua)?'Chrome':/Firefox/.test(ua)?'Firefox':/Safari/.test(ua)?'Safari':'Unknown')+' / '+(/Windows/.test(ua)?'Windows':/Android/.test(ua)?'Android':/iPhone|iPad/.test(ua)?'iOS':/Mac/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'?');
+const where=ev=>{const o=ev.filter(e=>e.t=='out'),t=o.filter(e=>/Tab hidden/.test(e.r)).length,w=o.length-t;return o.length?[t&&t+'× other tab / minimised',w&&w+'× other window / app'].filter(Boolean).join(', '):'—'};
+async function login(){pin=$('p').value;const r=await fetch('/api/admin/data?pin='+encodeURIComponent(pin));if(!r.ok)return alert('Wrong PIN');rows=await r.json();
+ $('lg').hidden=true;$('main').hidden=false;draw();new EventSource('/api/admin/stream?pin='+encodeURIComponent(pin)).onmessage=m=>{rows=JSON.parse(m.data);draw()}}
+function draw(){const s=[...rows].sort((a,b)=>b.score-a.score||b.done-a.done||a.away-b.away),c=k=>rows.filter(r=>r.risk==k).length;
+ $('sum').innerHTML=`<div><b>${rows.length}</b>Students</div><div><b>${rows.filter(r=>r.status!='playing').length}</b>Finished</div><div><b class="SUSPICIOUS">${c('SUSPICIOUS')}</b>Suspicious</div><div><b class="CHEATING">${c('CHEATING')}</b>Cheating</div>`;
+ $('tb').innerHTML=s.map((r,k)=>{if(only&&r.risk=='CLEAN')return'';
+  let h=`<tr class="r ${r.risk}" data-r="${esc(r.reg)}"><td>${r.risk=='CHEATING'?'🚨':['🥇','🥈','🥉'][k]||k+1}</td><td><b>${esc(r.name)}</b><br><small>${esc(r.reg)}</small><button class="del del-mini" data-reg="${esc(r.reg)}" aria-label="Delete student ${esc(r.reg)}" title="Delete student">Delete</button></td><td><b>${r.score}</b>/30</td><td>${r.done}/30</td><td>${ST[r.status]||r.status}</td><td class="${r.outs?'CHEATING':''}">${r.outs}</td><td>${r.away}s</td><td>${r.flags}</td><td>${esc(app(r.ua))}</td><td>${where(r.ev)}</td><td class="${r.risk}">${r.risk}</td></tr>`;
+  if(open==r.reg)h+=`<tr class="d"><td colspan="11">${r.ev.length?r.ev.map(e=>`${new Date(e.at).toLocaleTimeString()} — ${L[e.t]||esc(e.t)}${e.t=='out'?` · ${esc(e.r)} · away ${e.d||'?'}s`:e.r?' · '+esc(e.r):''}`).join('<br>'):'No suspicious activity ✅'}</td></tr>`;return h}).join('')}
+async function deleteStudent(value){const reg=value.trim().toUpperCase();if(!reg)return alert('Enter a student ID');if(!confirm(`Permanently delete student ${reg} and all their answers and activity?`))return;
+ try{const response=await fetch('/api/admin/student?pin='+encodeURIComponent(pin),{method:'DELETE',headers:{'content-type':'application/json'},body:JSON.stringify({reg})}),result=await response.json();if(!response.ok)throw new Error(result.error||'Delete failed');rows=rows.filter(r=>r.reg!==reg);if(open==reg)open=null;draw()}catch(error){alert(error.message||'Could not delete student')}}
+$('tb').onclick=async e=>{const button=e.target.closest('button.del');if(button){e.stopPropagation();await deleteStudent(button.dataset.reg);return}
+ const t=e.target.closest('tr.r');if(t){open=open==t.dataset.r?null:t.dataset.r;draw()}};
+</script></body></html>

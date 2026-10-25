@@ -1,0 +1,14 @@
+
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Chicken Road Rush - Student + Admin",
+            "url": "http://127.0.0.1:3001",
+            "webRoot": "${workspaceFolder}",
+            "preLaunchTask": "Run Chicken Road Rush Server"
+        }
+    ]
+}
